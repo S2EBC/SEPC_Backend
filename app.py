@@ -1,38 +1,39 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 import pymysql
-import serial
 import threading
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
+# Database connection
 db = pymysql.connect(host='localhost', user='system', password='1234', db='sensor', charset='utf8')
-com = serial.Serial('/dev/ttyUSB0', 9600)
 
-def read_serial():
-    while True:
-        data = com.readline().decode('utf-8', 'ignore')
-        data = data[:-5]
-        data = data.split(',')
-        
-        if len(data) == 3:
-            cursor = db.cursor()
-            sql = "UPDATE sensor SET pulse=%s, emg=%s, mlx=%s"
-            cursor.execute(sql, (data[0], data[1], data[2]))
-            db.commit()
 
-thread = threading.Thread(target=read_serial)
+# Start a thread to continuously read from the serial port
+thread = threading.Thread()
 thread.start()
 
 @app.route('/')
 def index():
     return "Hello, Flask Server!"
 
-@app.route('/sensor-data', methods=['GET'])
+@app.route('/get-all-data', methods=['GET'])
 def get_sensor_data():
     cursor = db.cursor()
     cursor.execute("SELECT pulse, emg, mlx FROM sensor")
     result = cursor.fetchone()
-    return jsonify({'pulse': result[0], 'emg': result[1], 'mlx': result[2]})
+    if result:
+        return jsonify({'pulse': result[0], 'emg': result[1], 'mlx': result[2]})
+    else:
+        return jsonify({'error': 'No data available'}), 404
+
+@app.route('/send-data', methods=['POST'])
+def receive_data():
+    data = request.get_json()
+    output_value = data.get('output')
+    # Process the received data as needed
+    return jsonify({'message': 'Data received successfully'})
 
 if __name__ == '__main__':
     app.run(debug=True)
